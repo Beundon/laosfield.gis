@@ -1,0 +1,77 @@
+/**
+ * Design direction: "field instrument", not "dashboard".
+ * This app is used outdoors, often in bright sun, by foresters/surveyors.
+ * Reference points: handheld GPS units (Garmin), topographic survey gear,
+ * expedition equipment readouts — high contrast, monospace data,
+ * a single hot accent color for live/active state, dark chrome that won't
+ * wash out next to a bright topo basemap.
+ */
+
+:root {
+  /* --- Palette --- */
+  --c-charcoal-950: #14171a;
+  --c-charcoal-900: #1b1f22;
+  --c-charcoal-800: #262b2f;
+  --c-charcoal-700: #343b40;
+  --c-olive-600: #4b5320;
+  --c-olive-500: #5f6b2b;
+  --c-paper-100: #f1ede2;
+  --c-paper-200: #e4ddc9;
+  --c-amber-500: #e8a33d;
+  --c-amber-400: #f2b657;
+  --c-safety-orange: #e8541f;
+  --c-signal-green: #5fb87a;
+  --c-signal-red: #d9534f;
+  --c-line-subtle: rgba(241, 237, 226, 0.12);
+
+  /* --- Type --- */
+  --font-display: 'Spectral', 'Iowan Old Style', Georgia, serif;
+  --font-data: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-ui);
+  background: var(--c-charcoal-950);
+  color: var(--c-paper-100);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+button {
+  font-family: inherit;
+}
+
+::selection {
+  background: var(--c-amber-500);
+  color: var(--c-charcoal-950);
+}
+
+/* Visible focus rings everywhere - field devices are often used with
+   external keyboards/styluses, and we never suppress this for aesthetics. */
+:focus-visible {
+  outline: 2px solid var(--c-amber-400);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

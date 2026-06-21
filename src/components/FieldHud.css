@@ -1,0 +1,79 @@
+.field-hud {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1200;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(20, 23, 26, 0.55) 0%, rgba(20, 23, 26, 0.97) 35%, var(--c-charcoal-950) 100%);
+  border-top: 1px solid var(--c-line-subtle);
+  backdrop-filter: blur(6px);
+  font-family: var(--font-data);
+  pointer-events: none;
+}
+
+.field-hud__row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.hud-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  background: var(--c-charcoal-900);
+  border: 1px solid var(--c-line-subtle);
+  border-radius: 3px;
+  min-width: 0;
+}
+
+.hud-cell--accent {
+  border-color: rgba(232, 163, 61, 0.45);
+  background: linear-gradient(180deg, rgba(232, 163, 61, 0.1), var(--c-charcoal-900) 60%);
+}
+
+.hud-cell__label {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--c-paper-200);
+  opacity: 0.6;
+  text-transform: uppercase;
+}
+
+.hud-cell__value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-amber-400);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-cell--accent .hud-cell__value {
+  color: var(--c-amber-400);
+}
+
+.hud-cell__sub {
+  font-size: 10px;
+  color: var(--c-paper-200);
+  opacity: 0.55;
+  font-weight: 400;
+}
+
+.field-hud__error {
+  max-width: 1100px;
+  margin: 6px auto 0;
+  font-size: 11px;
+  color: var(--c-signal-red);
+  font-family: var(--font-ui);
+}
+
+@media (max-width: 480px) {
+  .field-hud__row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
