@@ -1,0 +1,158 @@
+.markxy-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1490;
+  background: rgba(20, 23, 26, 0.55);
+}
+
+.markxy-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1500;
+  width: min(340px, calc(100vw - 28px));
+  max-height: calc(100vh - 60px);
+  overflow-y: auto;
+  background: var(--c-charcoal-900);
+  border: 1px solid var(--c-line-subtle);
+  border-radius: 10px;
+  padding: 16px;
+  font-family: var(--font-ui);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+}
+
+.markxy__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.markxy__header h2 {
+  font-family: var(--font-display);
+  font-size: 16px;
+  margin: 0;
+  color: var(--c-paper-100);
+}
+
+.markxy__close {
+  background: none;
+  border: none;
+  color: var(--c-paper-200);
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px;
+}
+
+.markxy__row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.markxy__mode-btn {
+  flex: 1;
+  padding: 7px 6px;
+  background: var(--c-charcoal-800);
+  border: 1px solid var(--c-line-subtle);
+  color: var(--c-paper-200);
+  border-radius: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.markxy__mode-btn--active {
+  background: var(--c-olive-600);
+  border-color: var(--c-amber-500);
+  color: var(--c-paper-100);
+}
+
+.markxy__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.markxy__fields label,
+.markxy__label-block {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--c-paper-200);
+  opacity: 0.85;
+}
+
+.markxy__label-block {
+  margin-bottom: 10px;
+}
+
+.markxy__fields input,
+.markxy__name,
+.markxy__label-block input,
+.markxy__label-block textarea {
+  padding: 8px 9px;
+  background: var(--c-charcoal-800);
+  border: 1px solid var(--c-line-subtle);
+  color: var(--c-paper-100);
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: var(--font-data);
+}
+
+.markxy__label-block textarea {
+  font-family: var(--font-ui);
+  resize: vertical;
+}
+
+.markxy__gps-btn {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 12px;
+  background: var(--c-charcoal-800);
+  border: 1px dashed rgba(232, 163, 61, 0.5);
+  color: var(--c-amber-400);
+  border-radius: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.markxy__error {
+  margin: 0 0 10px;
+  font-size: 11.5px;
+  color: var(--c-signal-red);
+}
+
+.markxy__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.markxy__actions button {
+  flex: 1;
+  padding: 9px;
+  background: var(--c-charcoal-800);
+  border: 1px solid var(--c-line-subtle);
+  color: var(--c-paper-100);
+  border-radius: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.markxy__save {
+  background: var(--c-olive-600);
+  border-color: var(--c-amber-500);
+}
+
+@media (max-width: 480px) {
+  .markxy-modal {
+    width: calc(100vw - 20px);
+    padding: 14px;
+  }
+}

@@ -1,0 +1,109 @@
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1390;
+  background: rgba(20, 23, 26, 0.35);
+}
+
+.menu-dropdown {
+  position: fixed;
+  top: 56px;
+  right: 14px;
+  z-index: 1400;
+  width: 260px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  background: var(--c-charcoal-900);
+  border: 1px solid var(--c-line-subtle);
+  border-radius: 10px;
+  padding: 12px;
+  font-family: var(--font-ui);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+
+.menu-dropdown__section {
+  margin-bottom: 14px;
+}
+
+.menu-dropdown__section:last-child {
+  margin-bottom: 0;
+}
+
+.menu-dropdown__label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--c-paper-200);
+  opacity: 0.55;
+  margin-bottom: 6px;
+}
+
+.menu-dropdown__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.menu-dropdown__grid--2 {
+  margin-bottom: 0;
+}
+
+.menu-dropdown__grid button,
+.menu-item {
+  padding: 9px 6px;
+  background: var(--c-charcoal-800);
+  border: 1px solid var(--c-line-subtle);
+  color: var(--c-paper-100);
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.menu-dropdown__grid button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.menu-item--active {
+  background: var(--c-olive-600);
+  border-color: var(--c-amber-500);
+}
+
+.menu-dropdown__row-btn {
+  width: 100%;
+  text-align: left;
+  padding: 9px 10px;
+  margin-bottom: 6px;
+  background: var(--c-charcoal-800);
+  border: 1px solid var(--c-line-subtle);
+  color: var(--c-paper-100);
+  border-radius: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.menu-dropdown__row-btn:last-child {
+  margin-bottom: 0;
+}
+
+.menu-dropdown__row-btn--rec {
+  background: var(--c-safety-orange);
+  border-color: var(--c-safety-orange);
+  color: #1a0d04;
+}
+
+@media (max-width: 640px) {
+  .menu-dropdown {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    max-height: 72vh;
+    border-radius: 14px 14px 0 0;
+    padding: 14px 14px calc(14px + env(safe-area-inset-bottom));
+  }
+}

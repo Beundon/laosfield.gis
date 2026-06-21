@@ -1,0 +1,171 @@
+.tools-panel {
+  position: fixed;
+  left: 50%;
+  bottom: 112px;
+  transform: translateX(-50%);
+  z-index: 1150;
+  width: min(360px, calc(100vw - 24px));
+  font-family: var(--font-ui);
+}
+
+.tools-panel__readout {
+  background: var(--c-charcoal-900);
+  border: 1px solid var(--c-line-subtle);
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+}
+
+.tools-panel__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.tools-panel__title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--c-paper-100);
+}
+
+.tools-panel__cancel {
+  background: none;
+  border: none;
+  color: var(--c-paper-200);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.tools-panel__row {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.subtool-btn {
+  flex: 1;
+  padding: 6px 4px;
+  background: var(--c-charcoal-800);
+  border: 1px solid var(--c-line-subtle);
+  color: var(--c-paper-200);
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.subtool-btn--active {
+  background: var(--c-olive-500);
+  border-color: var(--c-amber-500);
+  color: var(--c-paper-100);
+}
+
+.tools-panel__value {
+  font-family: var(--font-data);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--c-amber-400);
+  margin-bottom: 8px;
+}
+
+.tools-panel__value-alt {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--c-paper-200);
+  opacity: 0.6;
+}
+
+.tools-panel__input {
+  width: 100%;
+  margin-top: 6px;
+  padding: 7px 8px;
+  background: var(--c-charcoal-800);
+  border: 1px solid var(--c-line-subtle);
+  color: var(--c-paper-100);
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: var(--font-ui);
+}
+
+.tools-panel__textarea {
+  resize: vertical;
+  font-family: var(--font-ui);
+}
+
+.tools-panel__input::placeholder {
+  color: var(--c-paper-200);
+  opacity: 0.4;
+}
+
+.tools-panel__colors {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.color-swatch--active {
+  border-color: var(--c-paper-100);
+  box-shadow: 0 0 0 1px var(--c-charcoal-950);
+}
+
+.tools-panel__actions {
+  display: flex;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.tools-panel__actions button {
+  flex: 1;
+  padding: 8px 4px;
+  font-size: 11px;
+  background: var(--c-charcoal-800);
+  border: 1px solid var(--c-line-subtle);
+  color: var(--c-paper-100);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.tools-panel__actions button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.tools-panel__save {
+  background: var(--c-olive-600);
+  border-color: var(--c-amber-500);
+}
+
+.tools-panel__hint {
+  margin: 8px 0 0;
+  font-size: 10.5px;
+  color: var(--c-paper-200);
+  opacity: 0.55;
+}
+
+/* FieldHud grows to 2 rows below 480px, so push the tool bar up to clear it. */
+@media (max-width: 480px) {
+  .tools-panel {
+    bottom: 168px;
+    width: calc(100vw - 16px);
+  }
+}
+
+@media (max-width: 360px) {
+  .tools-panel {
+    bottom: 150px;
+  }
+}

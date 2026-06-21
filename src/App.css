@@ -1,0 +1,16 @@
+.app-shell {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.map-root {
+  position: absolute;
+  inset: 0;
+  background: var(--c-charcoal-950);
+}
+
+.leaflet-container {
+  font-family: var(--font-ui);
+}
