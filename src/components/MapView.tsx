@@ -81,30 +81,19 @@ export default function MapView({
   );
 
   // --- Locate me: show where I'm currently standing on the map -------
+  // Auto-starts on every app open/refresh (see effect below), and can
+  // still be toggled on/off manually with the button.
   const mapRef = useRef<L.Map | null>(null);
   const watchIdRef = useRef<number | null>(null);
+  const centeredOnceRef = useRef(false);
   const [myFix, setMyFix] = useState<MyFix | null>(null);
   const [tracking, setTracking] = useState(false);
   const [locating, setLocating] = useState(false);
 
-  useEffect(() => {
-    return () => {
-      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
-    };
-  }, []);
-
-  function toggleLocate() {
-    if (tracking) {
-      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-      setTracking(false);
-      setLocating(false);
-      return;
-    }
-    if (!navigator.geolocation) return;
+  function startLocating() {
+    if (!navigator.geolocation || watchIdRef.current !== null) return;
     setLocating(true);
     setTracking(true);
-    let centeredOnce = false;
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         const fix: MyFix = {
@@ -114,8 +103,8 @@ export default function MapView({
         };
         setMyFix(fix);
         setLocating(false);
-        if (!centeredOnce && mapRef.current) {
-          centeredOnce = true;
+        if (!centeredOnceRef.current && mapRef.current) {
+          centeredOnceRef.current = true;
           mapRef.current.flyTo([fix.lat, fix.lng], Math.max(mapRef.current.getZoom(), 16));
         }
       },
@@ -126,6 +115,28 @@ export default function MapView({
       { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 },
     );
   }
+
+  function stopLocating() {
+    if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+    watchIdRef.current = null;
+    setTracking(false);
+    setLocating(false);
+  }
+
+  function toggleLocate() {
+    if (tracking) stopLocating();
+    else startLocating();
+  }
+
+  // Auto-start the moment the app opens/refreshes -- shows current
+  // position status right away with no manual button tap required.
+  useEffect(() => {
+    startLocating();
+    return () => {
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // ---------------------------------------------------------------------
 
   return (
