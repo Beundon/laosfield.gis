@@ -159,7 +159,9 @@
 @media (max-width: 720px) {
   .data-panel {
     top: calc(58px + env(safe-area-inset-top));
-    width: calc(100vw - 28px);
+    left: 14px;
+    right: 62px;
+    width: auto;
     max-height: calc(100vh - 140px - env(safe-area-inset-top));
   }
 }
