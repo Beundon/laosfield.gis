@@ -1,8 +1,8 @@
 .import-panel {
   position: fixed;
-  top: 14px;
+  top: 66px;
   left: 14px;
-  z-index: 1100;
+  z-index: 1350;
   width: 280px;
   max-height: calc(100vh - 120px);
   overflow-y: auto;
@@ -94,7 +94,8 @@
 
 @media (max-width: 640px) {
   .import-panel {
+    top: 60px;
     width: calc(100vw - 28px);
-    max-height: calc(100vh - 100px);
+    max-height: calc(100vh - 140px);
   }
 }

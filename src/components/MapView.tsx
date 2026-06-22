@@ -13,7 +13,7 @@
  * of anything in App.tsx, so it's a one-file addition.
  * -----------------------------------------------------------------------
  */
-import { MapContainer, TileLayer, Polyline, Polygon, GeoJSON, useMapEvents, Marker, Popup, CircleMarker, Circle } from 'react-leaflet';
+import { MapContainer, TileLayer, Polyline, Polygon, GeoJSON, useMapEvents, useMap, Marker, Popup, CircleMarker, Circle } from 'react-leaflet';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import type { FeatureCollection } from 'geojson';
@@ -57,6 +57,62 @@ function ClickHandler({ onClick }: { onClick: (p: LatLng) => void }) {
       onClick({ lat: e.latlng.lat, lng: e.latlng.lng });
     },
   });
+  return null;
+}
+
+/**
+ * LiveTrackPolyline: renders a GPS track that grows in real time.
+ *
+ * react-leaflet's <Polyline> re-creates the Leaflet layer on every
+ * positions-prop change, which flickers and sometimes drops points when
+ * the array grows fast (e.g. every 1-2 s from watchPosition).
+ * This component holds a stable Leaflet Polyline layer and calls
+ * layer.addLatLng() for every new point — no flicker, no missed fixes.
+ */
+function LiveTrackPolyline({ trackPath }: { trackPath: LatLng[] }) {
+  const map = useMap();
+  const polyRef = useRef<L.Polyline | null>(null);
+  const prevLenRef = useRef(0);
+
+  useEffect(() => {
+    if (!polyRef.current) {
+      polyRef.current = L.polyline([], { color: '#e8541f', weight: 3 }).addTo(map);
+    }
+
+    const poly = polyRef.current;
+    const prev = prevLenRef.current;
+
+    if (trackPath.length === 0) {
+      // Track was cleared/stopped — reset the layer
+      poly.setLatLngs([]);
+      prevLenRef.current = 0;
+      return;
+    }
+
+    if (trackPath.length < prev) {
+      // Rare: track was reset — rebuild from scratch
+      poly.setLatLngs(trackPath.map((p) => [p.lat, p.lng]));
+      prevLenRef.current = trackPath.length;
+      return;
+    }
+
+    // Normal case: append only the new points since last render
+    for (let i = prev; i < trackPath.length; i++) {
+      poly.addLatLng([trackPath[i].lat, trackPath[i].lng]);
+    }
+    prevLenRef.current = trackPath.length;
+  }, [map, trackPath]);
+
+  // Clean up Leaflet layer on unmount
+  useEffect(() => {
+    return () => {
+      if (polyRef.current) {
+        polyRef.current.remove();
+        polyRef.current = null;
+      }
+    };
+  }, [map]);
+
   return null;
 }
 
@@ -112,7 +168,7 @@ export default function MapView({
         setLocating(false);
         setTracking(false);
       },
-      { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 },
     );
   }
 
@@ -194,10 +250,8 @@ export default function MapView({
           ),
         )}
 
-        {/* Saved + live track path */}
-        {trackPath.length > 1 && (
-          <Polyline positions={trackPath.map((p) => [p.lat, p.lng])} pathOptions={{ color: '#e8541f', weight: 3 }} />
-        )}
+        {/* Saved + live track path — uses imperative addLatLng for flicker-free real-time tracking */}
+        <LiveTrackPolyline trackPath={trackPath} />
 
         {/* In-progress tool geometry */}
         {activeTool === 'point' &&
@@ -279,7 +333,7 @@ export default function MapView({
           position: 'fixed',
           top: 64,
           right: 14,
-          zIndex: 1150,
+          zIndex: 1360,
           width: 44,
           height: 44,
           borderRadius: '50%',
