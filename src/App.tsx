@@ -170,7 +170,7 @@ export default function App() {
       () => {
         /* track recording continues; HUD already surfaces GPS errors */
       },
-      { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 },
     );
   }
 
