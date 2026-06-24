@@ -1,16 +1,3 @@
-/**
- * db.ts
- * -----------------------------------------------------------------------
- * Local offline workspace storage (spec §5 — "Local Workspace").
- *
- * Web target: IndexedDB via Dexie.
- * Mobile target (Capacitor/Android shell): the same IndexedDB store works
- * inside the WebView, so no separate SQLite/Hive layer is required for
- * the shared codebase — see android-shell/README.md for the native-bridge
- * notes on upgrading to @capacitor-community/sqlite if a future native
- * (non-WebView) rewrite is needed.
- * -----------------------------------------------------------------------
- */
 import Dexie, { type EntityTable } from 'dexie';
 import type { FeatureCollection } from 'geojson';
 
@@ -37,6 +24,8 @@ export interface StoredTrack {
   points: { lat: number; lng: number; elevationMeters: number | null; timestamp: number }[];
   createdAtIct: string;
   distanceMeters: number;
+  /** Hex color chosen in the toolbar at record time. Default '#d9534f' (red). */
+  color: string;
 }
 
 export interface StoredMeasurement {
@@ -47,9 +36,10 @@ export interface StoredMeasurement {
   resultMeters?: number;
   resultSquareMeters?: number;
   createdAtIct: string;
+  /** Hex color chosen in the toolbar when the measurement was saved. */
+  color: string;
 }
 
-/** A single named marker dropped with the Point tool. */
 export interface StoredPoint {
   id?: number;
   name: string;
@@ -60,7 +50,6 @@ export interface StoredPoint {
   createdAtIct: string;
 }
 
-/** A freehand line/polygon annotation sketched with the Draw tool. */
 export interface StoredDrawing {
   id?: number;
   name: string;
@@ -86,8 +75,6 @@ db.version(1).stores({
   measurements: '++id, kind, name, createdAtIct',
 });
 
-// v2: adds the Point and Draw tools' storage tables. Existing v1 tables
-// are carried forward unchanged -- only the two new ones are added.
 db.version(2).stores({
   layers: '++id, name, format, createdAtIct',
   rasters: '++id, name, format, createdAtIct',
@@ -96,5 +83,25 @@ db.version(2).stores({
   points: '++id, name, createdAtIct',
   drawings: '++id, name, geometryType, createdAtIct',
 });
+
+// v3: adds `color` field to tracks and measurements. Existing rows get
+// the default red so they render consistently with new ones.
+db.version(3)
+  .stores({
+    layers: '++id, name, format, createdAtIct',
+    rasters: '++id, name, format, createdAtIct',
+    tracks: '++id, name, createdAtIct',
+    measurements: '++id, kind, name, createdAtIct',
+    points: '++id, name, createdAtIct',
+    drawings: '++id, name, geometryType, createdAtIct',
+  })
+  .upgrade(async (tx) => {
+    await tx.table('tracks').toCollection().modify((row) => {
+      if (!row.color) row.color = '#d9534f';
+    });
+    await tx.table('measurements').toCollection().modify((row) => {
+      if (!row.color) row.color = '#d9534f';
+    });
+  });
 
 export default db;
