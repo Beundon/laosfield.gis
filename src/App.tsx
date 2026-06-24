@@ -1,14 +1,29 @@
 /**
  * App.tsx
  * -----------------------------------------------------------------------
- * Top-level wiring: runs the boot detection sequence, then renders the
- * map, HUD, top bar, menu, tool control bar, and data library once a
- * region config is resolved.
+ * TRACK RECORDING FIXES (3 bugs from the uploaded v2):
  *
- * Every tool (Point, Draw, Distance, Area, track recording, Mark Point
- * XY) writes straight into Dexie/IndexedDB so the Data library
- * (DataPanel) always reflects the latest state with no extra wiring
- * beyond useLiveQuery.
+ * FIX 1 — Dual watchPosition (main straight-line cause):
+ *   MapView auto-started its own navigator.geolocation.watchPosition for
+ *   the "locate me" blue dot. App.tsx started a second watchPosition when
+ *   recording began. On Android Chrome and iOS Safari, two concurrent GPS
+ *   watches interleave their callbacks — track recording received only
+ *   every other fix. Walking at 1 fix/s → track gets a point every ~2 s
+ *   → sparse enough to look like a straight line between start and end.
+ *
+ *   Fix: App.tsx is now the SINGLE GPS consumer while recording. It feeds
+ *   the latest fix to MapView via `recordingPosition` so the blue dot
+ *   stays alive. MapView suspends its own watch while isRecording=true.
+ *
+ * FIX 2 — No minimum distance filter:
+ *   Every jitter callback (GPS noise 3–8 m) added a point even when
+ *   standing still, creating a cluster at the start that looked like a
+ *   straight spike. Added a 3 m gate: skip any fix < 3 m from last point.
+ *
+ * FIX 3 — Track line persisted after Stop:
+ *   setTrackPoints([]) was only called when STARTING a new recording, so
+ *   the orange line stayed on the map indefinitely after stopping. Now
+ *   cleared immediately after the track is saved to the DB.
  * -----------------------------------------------------------------------
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -25,10 +40,15 @@ import ImportPanel from './components/ImportPanel';
 import DataPanel from './components/DataPanel';
 import db from './storage/db';
 import type { LatLng } from './core/measurementEngine';
-import { measureLineDistance, measurePolygonArea } from './core/measurementEngine';
+import { measureLineDistance, measurePolygonArea, haversineDistanceMeters } from './core/measurementEngine';
 import { exportTrackAsKml, exportTrackAsGpx, type TrackPoint } from './core/exportEngine';
 import { formatIctIso8601 } from './core/timeEngine';
 import './App.css';
+
+/** Minimum metres a new GPS fix must differ from the last accepted point
+ *  before it is added to the track. Eliminates stationary GPS jitter
+ *  (typically 3–8 m on a phone) without filtering real slow movement. */
+const MIN_TRACK_DISTANCE_M = 3;
 
 export default function App() {
   const { config, liveGps, gpsError } = useLaosBootSequence();
@@ -48,6 +68,12 @@ export default function App() {
   const [trackPoints, setTrackPoints] = useState<TrackPoint[]>([]);
   const recordWatchId = useRef<number | null>(null);
 
+  // FIX 1: Position fed from the track watch → MapView blue dot while
+  // recording, so MapView can suspend its own watch (no two GPS consumers).
+  const [recordingPosition, setRecordingPosition] = useState<{
+    lat: number; lng: number; accuracyMeters: number | null;
+  } | null>(null);
+
   const storedLayers = useLiveQuery(() => db.layers.toArray(), []) ?? [];
   const storedPoints = useLiveQuery(() => db.points.toArray(), []) ?? [];
   const storedDrawings = useLiveQuery(() => db.drawings.toArray(), []) ?? [];
@@ -55,11 +81,7 @@ export default function App() {
   const handleMapClick = useCallback(
     (point: LatLng) => {
       if (activeTool === 'none') return;
-      // Point tool only ever holds a single in-progress location.
-      if (activeTool === 'point') {
-        setToolPoints([point]);
-        return;
-      }
+      if (activeTool === 'point') { setToolPoints([point]); return; }
       setToolPoints((prev) => [...prev, point]);
     },
     [activeTool],
@@ -72,78 +94,57 @@ export default function App() {
     setFormNote('');
   }
 
-  function handleUndo() {
-    setToolPoints((prev) => prev.slice(0, -1));
-  }
-
-  function handleClear() {
-    setToolPoints([]);
-  }
+  function handleUndo() { setToolPoints((prev) => prev.slice(0, -1)); }
+  function handleClear() { setToolPoints([]); }
 
   async function handleSaveTool() {
     const now = formatIctIso8601();
-
     if (activeTool === 'point' && toolPoints.length >= 1) {
       const p = toolPoints[0];
       await db.points.add({
         name: formName.trim() || 'Point ' + now,
-        lat: p.lat,
-        lng: p.lng,
+        lat: p.lat, lng: p.lng,
         elevationMeters: liveGps?.elevationMeters ?? null,
-        note: formNote.trim(),
-        createdAtIct: now,
+        note: formNote.trim(), createdAtIct: now,
       });
     } else if (activeTool === 'draw' && toolPoints.length >= 2) {
       await db.drawings.add({
         name: formName.trim() || 'Drawing ' + now,
-        geometryType: drawGeometryType,
-        points: toolPoints,
-        color: drawColor,
-        createdAtIct: now,
+        geometryType: drawGeometryType, points: toolPoints,
+        color: drawColor, createdAtIct: now,
       });
     } else if (activeTool === 'distance' && toolPoints.length >= 2) {
       const result = measureLineDistance(toolPoints);
       await db.measurements.add({
-        kind: 'distance',
-        name: 'Distance ' + now,
-        points: toolPoints,
-        resultMeters: result.meters,
-        createdAtIct: now,
+        kind: 'distance', name: 'Distance ' + now,
+        points: toolPoints, resultMeters: result.meters, createdAtIct: now,
       });
     } else if (activeTool === 'area' && toolPoints.length >= 3) {
       const result = measurePolygonArea(toolPoints);
       await db.measurements.add({
-        kind: 'area',
-        name: 'Area ' + now,
-        points: toolPoints,
-        resultSquareMeters: result.squareMeters,
-        createdAtIct: now,
+        kind: 'area', name: 'Area ' + now,
+        points: toolPoints, resultSquareMeters: result.squareMeters, createdAtIct: now,
       });
     }
-
-    setToolPoints([]);
-    setFormName('');
-    setFormNote('');
-    setActiveTool('none');
+    setToolPoints([]); setFormName(''); setFormNote(''); setActiveTool('none');
   }
 
   async function toggleRecording() {
     if (isRecording) {
+      // ── STOP ─────────────────────────────────────────────────────────
       if (recordWatchId.current !== null) {
         navigator.geolocation.clearWatch(recordWatchId.current);
         recordWatchId.current = null;
       }
       setIsRecording(false);
+      setRecordingPosition(null); // release GPS back to MapView's own watch
 
-      // Persist the finished track to the library so it shows up under
-      // Data > Tracks (and can be re-exported later in any format).
       if (trackPoints.length > 1) {
         const result = measureLineDistance(trackPoints);
         await db.tracks.add({
           name: 'Track ' + formatIctIso8601(),
           points: trackPoints.map((p) => ({
-            lat: p.lat,
-            lng: p.lng,
+            lat: p.lat, lng: p.lng,
             elevationMeters: p.elevationMeters ?? null,
             timestamp: p.timestamp,
           })),
@@ -151,34 +152,62 @@ export default function App() {
           distanceMeters: result.meters,
         });
       }
+
+      // FIX 3: Clear track line immediately after saving so the map is
+      // clean and ready for the next session instead of keeping the old
+      // orange line on screen until the next recording starts.
+      setTrackPoints([]);
       return;
     }
+
+    // ── START ───────────────────────────────────────────────────────────
     setTrackPoints([]);
     setIsRecording(true);
+
     recordWatchId.current = navigator.geolocation.watchPosition(
       (pos) => {
-        setTrackPoints((prev) => [
-          ...prev,
-          {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            elevationMeters: pos.coords.altitude ?? null,
-            timestamp: pos.timestamp,
-          },
-        ]);
+        const newPt: TrackPoint = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          elevationMeters: pos.coords.altitude ?? null,
+          timestamp: pos.timestamp,
+        };
+
+        // FIX 1: Forward position to MapView so it doesn't need its own
+        // watch while we are recording (one GPS consumer only).
+        setRecordingPosition({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracyMeters: pos.coords.accuracy ?? null,
+        });
+
+        // FIX 2: Distance gate — reject fixes < MIN_TRACK_DISTANCE_M from
+        // the previous accepted point to prevent stationary jitter from
+        // creating a dense cluster that renders as a straight spike.
+        setTrackPoints((prev) => {
+          if (prev.length === 0) return [newPt];
+          const last = prev[prev.length - 1];
+          const dist = haversineDistanceMeters(
+            { lat: last.lat, lng: last.lng },
+            { lat: newPt.lat, lng: newPt.lng },
+          );
+          if (dist < MIN_TRACK_DISTANCE_M) return prev;
+          return [...prev, newPt];
+        });
       },
-      () => {
-        /* track recording continues; HUD already surfaces GPS errors */
+      () => { /* GPS error during recording — HUD surfaces this */ },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,     // always a fresh hardware read, never a cached fix
+        timeout: 10000,
       },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 },
     );
   }
 
   useEffect(() => {
     return () => {
-      if (recordWatchId.current !== null) {
+      if (recordWatchId.current !== null)
         navigator.geolocation.clearWatch(recordWatchId.current);
-      }
     };
   }, []);
 
@@ -189,9 +218,7 @@ export default function App() {
     else exportTrackAsGpx(name, trackPoints);
   }
 
-  if (!config) {
-    return <BootSplash />;
-  }
+  if (!config) return <BootSplash />;
 
   return (
     <div className="app-shell">
@@ -213,6 +240,8 @@ export default function App() {
         drawColor={drawColor}
         onMapClick={handleMapClick}
         trackPath={trackPoints.map((p) => ({ lat: p.lat, lng: p.lng }))}
+        isRecording={isRecording}
+        recordingPosition={recordingPosition}
       />
 
       <ToolsPanel
@@ -248,11 +277,7 @@ export default function App() {
       )}
 
       {showMarkPointXY && <MarkPointXY liveGps={liveGps} onClose={() => setShowMarkPointXY(false)} />}
-
-      {showImport && (
-        <ImportPanel onClose={() => setShowImport(false)} onLayerImported={() => {}} />
-      )}
-
+      {showImport && <ImportPanel onClose={() => setShowImport(false)} onLayerImported={() => {}} />}
       {showData && <DataPanel onClose={() => setShowData(false)} />}
 
       <FieldHud liveGps={liveGps} gpsError={gpsError} isIct={config.isIct} />
