@@ -122,6 +122,7 @@ export default function DataPanel({ onClose }: { onClose: () => void }) {
                 title={t.name}
                 subtitle={`${formatDistance(t.distanceMeters)} — ${t.points.length} fixes`}
                 meta={t.createdAtIct}
+                swatch={t.color}
                 onExportCsv={() => exportTrackAsCsv(t.name, t.points)}
                 onExportKml={() => exportTrackAsKml(t.name, t.points)}
                 onExportGpx={() => exportTrackAsGpx(t.name, t.points)}
@@ -146,6 +147,7 @@ export default function DataPanel({ onClose }: { onClose: () => void }) {
                     : formatArea(m.resultSquareMeters ?? 0)
                 }
                 meta={m.createdAtIct}
+                swatch={m.color}
                 onExportCsv={() => exportMeasurementAsCsv(m)}
                 onDelete={() => db.measurements.delete(m.id!)}
               />

@@ -68,8 +68,8 @@
   font-family: var(--font-data);
   font-size: 18px;
   font-weight: 700;
-  color: var(--c-amber-400);
   margin-bottom: 8px;
+  /* color is set inline from activeColor */
 }
 
 .tools-panel__value-alt {
@@ -102,26 +102,56 @@
   opacity: 0.4;
 }
 
+/* ── Color picker row ─────────────────────────────────── */
 .tools-panel__colors {
   display: flex;
-  gap: 6px;
-  margin-top: 8px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: var(--c-charcoal-800);
+  border: 1px solid var(--c-line-subtle);
+  border-radius: 6px;
+}
+
+.tools-panel__colors-label {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--c-paper-200);
+  opacity: 0.55;
+  flex-shrink: 0;
+}
+
+.tools-panel__colors-name {
+  font-size: 11px;
+  color: var(--c-paper-200);
+  opacity: 0.7;
+  margin-left: 2px;
 }
 
 .color-swatch {
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   border: 2px solid transparent;
   cursor: pointer;
   padding: 0;
+  flex-shrink: 0;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.color-swatch:hover {
+  transform: scale(1.12);
 }
 
 .color-swatch--active {
-  border-color: var(--c-paper-100);
-  box-shadow: 0 0 0 1px var(--c-charcoal-950);
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.25), 0 0 8px currentColor;
+  transform: scale(1.1);
 }
 
+/* ── Action buttons ───────────────────────────────────── */
 .tools-panel__actions {
   display: flex;
   gap: 5px;
@@ -145,8 +175,9 @@
 }
 
 .tools-panel__save {
-  background: var(--c-olive-600);
-  border-color: var(--c-amber-500);
+  /* background and border-color set inline from activeColor */
+  color: #fff !important;
+  font-weight: 700;
 }
 
 .tools-panel__hint {
@@ -156,16 +187,9 @@
   opacity: 0.55;
 }
 
-/* FieldHud grows to 2 rows below 480px, so push the tool bar up to clear it. */
 @media (max-width: 480px) {
-  .tools-panel {
-    bottom: 168px;
-    width: calc(100vw - 16px);
-  }
+  .tools-panel { bottom: 168px; width: calc(100vw - 16px); }
 }
-
 @media (max-width: 360px) {
-  .tools-panel {
-    bottom: 150px;
-  }
+  .tools-panel { bottom: 150px; }
 }
