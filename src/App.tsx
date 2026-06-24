@@ -1,29 +1,16 @@
 /**
  * App.tsx
  * -----------------------------------------------------------------------
- * TRACK RECORDING FIXES (3 bugs from the uploaded v2):
+ * COLOR CHANGE: A single `activeColor` state (default red '#d9534f') is
+ * now shared across all geometry tools — Draw, Distance, Area, and Track.
+ * The color chosen in ToolsPanel is immediately reflected in the live map
+ * preview and is saved into the DB with each result, so it persists in
+ * the Data library and exports.
  *
- * FIX 1 — Dual watchPosition (main straight-line cause):
- *   MapView auto-started its own navigator.geolocation.watchPosition for
- *   the "locate me" blue dot. App.tsx started a second watchPosition when
- *   recording began. On Android Chrome and iOS Safari, two concurrent GPS
- *   watches interleave their callbacks — track recording received only
- *   every other fix. Walking at 1 fix/s → track gets a point every ~2 s
- *   → sparse enough to look like a straight line between start and end.
- *
- *   Fix: App.tsx is now the SINGLE GPS consumer while recording. It feeds
- *   the latest fix to MapView via `recordingPosition` so the blue dot
- *   stays alive. MapView suspends its own watch while isRecording=true.
- *
- * FIX 2 — No minimum distance filter:
- *   Every jitter callback (GPS noise 3–8 m) added a point even when
- *   standing still, creating a cluster at the start that looked like a
- *   straight spike. Added a 3 m gate: skip any fix < 3 m from last point.
- *
- * FIX 3 — Track line persisted after Stop:
- *   setTrackPoints([]) was only called when STARTING a new recording, so
- *   the orange line stayed on the map indefinitely after stopping. Now
- *   cleared immediately after the track is saved to the DB.
+ * TRACK RECORDING FIXES (carried forward from v2 fix):
+ * - Single GPS consumer (no dual watchPosition)
+ * - 3 m minimum distance gate
+ * - Track cleared from map immediately after saving on Stop
  * -----------------------------------------------------------------------
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -33,7 +20,7 @@ import BootSplash from './components/BootSplash';
 import TopBar from './components/TopBar';
 import FieldHud from './components/FieldHud';
 import MapView from './components/MapView';
-import ToolsPanel, { type ToolKind, type DrawGeometryType } from './components/ToolsPanel';
+import ToolsPanel, { type ToolKind, type DrawGeometryType, DEFAULT_TOOL_COLOR } from './components/ToolsPanel';
 import MenuDropdown from './components/MenuDropdown';
 import MarkPointXY from './components/MarkPointXY';
 import ImportPanel from './components/ImportPanel';
@@ -45,9 +32,6 @@ import { exportTrackAsKml, exportTrackAsGpx, type TrackPoint } from './core/expo
 import { formatIctIso8601 } from './core/timeEngine';
 import './App.css';
 
-/** Minimum metres a new GPS fix must differ from the last accepted point
- *  before it is added to the track. Eliminates stationary GPS jitter
- *  (typically 3–8 m on a phone) without filtering real slow movement. */
 const MIN_TRACK_DISTANCE_M = 3;
 
 export default function App() {
@@ -60,22 +44,22 @@ export default function App() {
   const [activeTool, setActiveTool] = useState<ToolKind>('none');
   const [toolPoints, setToolPoints] = useState<LatLng[]>([]);
   const [drawGeometryType, setDrawGeometryType] = useState<DrawGeometryType>('line');
-  const [drawColor, setDrawColor] = useState('#e8a33d');
+
+  /** Single shared color for ALL geometry tools (Draw/Distance/Area/Track). Default = red. */
+  const [activeColor, setActiveColor] = useState(DEFAULT_TOOL_COLOR);
+
   const [formName, setFormName] = useState('');
   const [formNote, setFormNote] = useState('');
 
   const [isRecording, setIsRecording] = useState(false);
   const [trackPoints, setTrackPoints] = useState<TrackPoint[]>([]);
   const recordWatchId = useRef<number | null>(null);
-
-  // FIX 1: Position fed from the track watch → MapView blue dot while
-  // recording, so MapView can suspend its own watch (no two GPS consumers).
   const [recordingPosition, setRecordingPosition] = useState<{
     lat: number; lng: number; accuracyMeters: number | null;
   } | null>(null);
 
-  const storedLayers = useLiveQuery(() => db.layers.toArray(), []) ?? [];
-  const storedPoints = useLiveQuery(() => db.points.toArray(), []) ?? [];
+  const storedLayers   = useLiveQuery(() => db.layers.toArray(), []) ?? [];
+  const storedPoints   = useLiveQuery(() => db.points.toArray(), []) ?? [];
   const storedDrawings = useLiveQuery(() => db.drawings.toArray(), []) ?? [];
 
   const handleMapClick = useCallback(
@@ -94,11 +78,12 @@ export default function App() {
     setFormNote('');
   }
 
-  function handleUndo() { setToolPoints((prev) => prev.slice(0, -1)); }
+  function handleUndo()  { setToolPoints((prev) => prev.slice(0, -1)); }
   function handleClear() { setToolPoints([]); }
 
   async function handleSaveTool() {
     const now = formatIctIso8601();
+
     if (activeTool === 'point' && toolPoints.length >= 1) {
       const p = toolPoints[0];
       await db.points.add({
@@ -110,34 +95,44 @@ export default function App() {
     } else if (activeTool === 'draw' && toolPoints.length >= 2) {
       await db.drawings.add({
         name: formName.trim() || 'Drawing ' + now,
-        geometryType: drawGeometryType, points: toolPoints,
-        color: drawColor, createdAtIct: now,
+        geometryType: drawGeometryType,
+        points: toolPoints,
+        color: activeColor,       // uses the currently selected color
+        createdAtIct: now,
       });
     } else if (activeTool === 'distance' && toolPoints.length >= 2) {
       const result = measureLineDistance(toolPoints);
       await db.measurements.add({
-        kind: 'distance', name: 'Distance ' + now,
-        points: toolPoints, resultMeters: result.meters, createdAtIct: now,
+        kind: 'distance',
+        name: 'Distance ' + now,
+        points: toolPoints,
+        resultMeters: result.meters,
+        color: activeColor,       // stored so DataPanel shows correct color
+        createdAtIct: now,
       });
     } else if (activeTool === 'area' && toolPoints.length >= 3) {
       const result = measurePolygonArea(toolPoints);
       await db.measurements.add({
-        kind: 'area', name: 'Area ' + now,
-        points: toolPoints, resultSquareMeters: result.squareMeters, createdAtIct: now,
+        kind: 'area',
+        name: 'Area ' + now,
+        points: toolPoints,
+        resultSquareMeters: result.squareMeters,
+        color: activeColor,
+        createdAtIct: now,
       });
     }
+
     setToolPoints([]); setFormName(''); setFormNote(''); setActiveTool('none');
   }
 
   async function toggleRecording() {
     if (isRecording) {
-      // ── STOP ─────────────────────────────────────────────────────────
       if (recordWatchId.current !== null) {
         navigator.geolocation.clearWatch(recordWatchId.current);
         recordWatchId.current = null;
       }
       setIsRecording(false);
-      setRecordingPosition(null); // release GPS back to MapView's own watch
+      setRecordingPosition(null);
 
       if (trackPoints.length > 1) {
         const result = measureLineDistance(trackPoints);
@@ -150,41 +145,29 @@ export default function App() {
           })),
           createdAtIct: formatIctIso8601(),
           distanceMeters: result.meters,
+          color: activeColor,     // store chosen color with the track
         });
       }
-
-      // FIX 3: Clear track line immediately after saving so the map is
-      // clean and ready for the next session instead of keeping the old
-      // orange line on screen until the next recording starts.
-      setTrackPoints([]);
+      setTrackPoints([]);         // clear track line from map immediately
       return;
     }
 
-    // ── START ───────────────────────────────────────────────────────────
     setTrackPoints([]);
     setIsRecording(true);
 
     recordWatchId.current = navigator.geolocation.watchPosition(
       (pos) => {
-        const newPt: TrackPoint = {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          elevationMeters: pos.coords.altitude ?? null,
-          timestamp: pos.timestamp,
-        };
-
-        // FIX 1: Forward position to MapView so it doesn't need its own
-        // watch while we are recording (one GPS consumer only).
         setRecordingPosition({
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
           accuracyMeters: pos.coords.accuracy ?? null,
         });
-
-        // FIX 2: Distance gate — reject fixes < MIN_TRACK_DISTANCE_M from
-        // the previous accepted point to prevent stationary jitter from
-        // creating a dense cluster that renders as a straight spike.
         setTrackPoints((prev) => {
+          const newPt: TrackPoint = {
+            lat: pos.coords.latitude, lng: pos.coords.longitude,
+            elevationMeters: pos.coords.altitude ?? null,
+            timestamp: pos.timestamp,
+          };
           if (prev.length === 0) return [newPt];
           const last = prev[prev.length - 1];
           const dist = haversineDistanceMeters(
@@ -195,12 +178,8 @@ export default function App() {
           return [...prev, newPt];
         });
       },
-      () => { /* GPS error during recording — HUD surfaces this */ },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 0,     // always a fresh hardware read, never a cached fix
-        timeout: 10000,
-      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 },
     );
   }
 
@@ -237,9 +216,10 @@ export default function App() {
         activeTool={activeTool}
         activeToolPoints={toolPoints}
         drawGeometryType={drawGeometryType}
-        drawColor={drawColor}
+        activeColor={activeColor}        // passed to ALL live geometry previews
         onMapClick={handleMapClick}
         trackPath={trackPoints.map((p) => ({ lat: p.lat, lng: p.lng }))}
+        trackColor={activeColor}         // live track line uses same color
         isRecording={isRecording}
         recordingPosition={recordingPosition}
       />
@@ -248,12 +228,12 @@ export default function App() {
         activeTool={activeTool}
         points={toolPoints}
         drawGeometryType={drawGeometryType}
-        drawColor={drawColor}
+        activeColor={activeColor}
         formName={formName}
         formNote={formNote}
         onSelectTool={handleSelectTool}
         onSelectDrawGeometry={setDrawGeometryType}
-        onColorChange={setDrawColor}
+        onColorChange={setActiveColor}   // one handler for all tools
         onNameChange={setFormName}
         onNoteChange={setFormNote}
         onUndo={handleUndo}
