@@ -1,0 +1,93 @@
+.gps-bar {
+  position: fixed;
+  bottom: 160px;
+  right: 10px;
+  z-index: 1360;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--c-charcoal-900);
+  border: 1px solid var(--c-line-subtle);
+  border-radius: 22px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+  font-family: var(--font-data);
+  font-size: 11px;
+}
+
+.gps-bar--rec {
+  border-color: rgba(217, 83, 79, 0.5);
+  background: rgba(26, 14, 10, 0.95);
+}
+
+.gps-bar__locate {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: var(--c-charcoal-800);
+  color: var(--c-paper-100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 5px;
+}
+.gps-bar__locate:hover { background: var(--c-olive-600); }
+.gps-bar__locate svg  { width: 100%; height: 100%; }
+
+.gps-bar__signal {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 16px;
+}
+
+.gps-bar__signal-bar {
+  display: block;
+  width: 4px;
+  background: var(--c-charcoal-700);
+  border-radius: 1px;
+}
+
+.gps-bar__signal-bar:nth-child(1) { height: 4px; }
+.gps-bar__signal-bar:nth-child(2) { height: 6px; }
+.gps-bar__signal-bar:nth-child(3) { height: 9px; }
+.gps-bar__signal-bar:nth-child(4) { height: 12px; }
+.gps-bar__signal-bar:nth-child(5) { height: 16px; }
+
+.gps-bar__signal-bar--on { background: var(--c-signal-green); }
+
+.gps-bar__acc { color: var(--c-paper-200); white-space: nowrap; }
+.gps-bar__acc--wait { color: var(--c-amber-400); opacity: 0.7; }
+
+.gps-bar__speed {
+  color: var(--c-amber-400);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.gps-bar__rec {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #ff7b78;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.gps-bar__rec-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #d9534f;
+  box-shadow: 0 0 6px #d9534f;
+  animation: rec-pulse 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes rec-pulse { 0%,100%{opacity:1} 50%{opacity:0.25} }
+
+@media (max-width: 380px) {
+  .gps-bar__speed { display: none; }
+}
