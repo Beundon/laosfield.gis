@@ -1,32 +1,11 @@
 /**
- * App.tsx
+ * App.tsx — v5
  *
- * GPS architecture — rebuilt for Garmin-grade tracking accuracy:
- * ----------------------------------------------------------------
- * Root cause of the straight-line bug: MapView.tsx auto-started its own
- * navigator.geolocation.watchPosition for the "locate me" dot. When
- * recording started, App.tsx opened a SECOND watch. Android Chrome and
- * iOS Safari interleave callbacks between both consumers — track
- * recording received only 1 fix per ~30 s instead of every 1–3 s.
- * Two GPS points = one straight line, regardless of route taken.
- *
- * Fix: ONE watchPosition, started once, never stopped while the app is
- * open. Managed entirely in the useGpsTrack hook. This mirrors how
- * Garmin GPSMAP 64 hardware works — the GNSS chip runs continuously
- * at its native rate; the track logger and the "current position" display
- * both read from the same position stream, never from separate requests.
- *
- * Quality filtering (Garmin-equivalent):
- *   - Accuracy gate: reject fixes >25 m horizontal error (Garmin's
- *     equivalent of requiring ≥3 satellite bars before recording)
- *   - Speed gate: reject fixes implying >250 km/h movement between
- *     consecutive fixes (cell-tower interpolation artefacts)
- *   - Distance gate: minimum 2 m movement between stored track points
- *     (eliminates stationary jitter clusters)
- *
- * Track rendering: the Leaflet polyline is managed imperatively via
- * a direct L.Map ref — never via React state or re-renders, so every
- * GPS fix extends the line immediately with zero frame delay.
+ * Changes from v4:
+ * 1. Basemap state (activeBasemapId) added — drives MapView's TileLayer
+ * 2. storedTracks + storedMeasurements passed to MapView for permanent rendering
+ * 3. Screen Wake Lock in useGpsTrack (screen-off fix)
+ * 4. Page Visibility restart in useGpsTrack (screen-off fix)
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -48,18 +27,17 @@ import type { LatLng } from './core/measurementEngine';
 import { measureLineDistance, measurePolygonArea } from './core/measurementEngine';
 import { exportTrackAsKml, exportTrackAsGpx, type TrackPoint } from './core/exportEngine';
 import { formatIctIso8601 } from './core/timeEngine';
+import { DEFAULT_BASEMAP_ID } from './core/basemaps';
 import './App.css';
 
 export default function App() {
   const { config, liveGps, gpsError } = useLaosBootSequence();
 
-  // ── UI panels ────────────────────────────────────────────────────────
-  const [showMenu,       setShowMenu]       = useState(false);
-  const [showImport,     setShowImport]     = useState(false);
-  const [showData,       setShowData]       = useState(false);
-  const [showMarkPointXY, setShowMarkPointXY] = useState(false);
+  const [showMenu,         setShowMenu]         = useState(false);
+  const [showImport,       setShowImport]       = useState(false);
+  const [showData,         setShowData]         = useState(false);
+  const [showMarkPointXY,  setShowMarkPointXY]  = useState(false);
 
-  // ── Tool state ───────────────────────────────────────────────────────
   const [activeTool,       setActiveTool]       = useState<ToolKind>('none');
   const [toolPoints,       setToolPoints]       = useState<LatLng[]>([]);
   const [drawGeometryType, setDrawGeometryType] = useState<DrawGeometryType>('line');
@@ -67,50 +45,50 @@ export default function App() {
   const [formName,         setFormName]         = useState('');
   const [formNote,         setFormNote]         = useState('');
 
-  // ── Track recording state ────────────────────────────────────────────
+  // Basemap state — persisted to localStorage so it survives page reload
+  const [activeBasemapId, setActiveBasemapId]  = useState<string>(() => {
+    return localStorage.getItem('laogis_basemap') ?? DEFAULT_BASEMAP_ID;
+  });
+  const handleBasemapChange = useCallback((id: string) => {
+    setActiveBasemapId(id);
+    localStorage.setItem('laogis_basemap', id);
+  }, []);
+
   const [isRecording,  setIsRecording]  = useState(false);
   const [trackCount,   setTrackCount]   = useState(0);
   const [liveFix,      setLiveFix]      = useState<LiveFix | null>(null);
 
-  // Refs: never trigger re-renders, used by GPS callbacks
-  const trackPtsRef     = useRef<TrackPoint[]>([]);
-  const trackLayerRef   = useRef<L.Polyline | null>(null);
-  const dotLayerRef     = useRef<L.CircleMarker | null>(null);
-  const ringLayerRef    = useRef<L.Circle | null>(null);
-  const mapRef          = useRef<L.Map | null>(null);
-  const activeColorRef  = useRef(activeColor);
+  const trackPtsRef    = useRef<TrackPoint[]>([]);
+  const trackLayerRef  = useRef<L.Polyline | null>(null);
+  const dotLayerRef    = useRef<L.CircleMarker | null>(null);
+  const ringLayerRef   = useRef<L.Circle | null>(null);
+  const mapRef         = useRef<L.Map | null>(null);
+  const activeColorRef = useRef(activeColor);
   useEffect(() => { activeColorRef.current = activeColor; }, [activeColor]);
 
-  // ── Stored data ──────────────────────────────────────────────────────
-  const storedLayers   = useLiveQuery(() => db.layers.toArray(),   []) ?? [];
-  const storedPoints   = useLiveQuery(() => db.points.toArray(),   []) ?? [];
-  const storedDrawings = useLiveQuery(() => db.drawings.toArray(), []) ?? [];
+  // ── All stored data ───────────────────────────────────────────────────
+  const storedLayers       = useLiveQuery(() => db.layers.toArray(),       []) ?? [];
+  const storedPoints       = useLiveQuery(() => db.points.toArray(),       []) ?? [];
+  const storedDrawings     = useLiveQuery(() => db.drawings.toArray(),     []) ?? [];
+  const storedTracks       = useLiveQuery(() => db.tracks.toArray(),       []) ?? [];
+  const storedMeasurements = useLiveQuery(() => db.measurements.toArray(), []) ?? [];
 
-  // ── Map ready callback ───────────────────────────────────────────────
-  const onMapReady = useCallback((map: L.Map) => {
-    mapRef.current = map;
-  }, []);
+  const onMapReady = useCallback((map: L.Map) => { mapRef.current = map; }, []);
 
-
-  // Locate-me: pan to current fix
   const locateMe = useCallback(() => {
     if (!liveFix || !mapRef.current) return;
     mapRef.current.flyTo([liveFix.lat, liveFix.lng], Math.max(mapRef.current.getZoom(), 16), { animate: true, duration: 0.8 });
   }, [liveFix]);
 
-  // ── GPS hook — single watch, runs the whole app lifetime ─────────────
+  // ── GPS callbacks ─────────────────────────────────────────────────────
   const handleFix = useCallback((fix: LiveFix) => {
     setLiveFix(fix);
-
-    // Update "you are here" dot imperatively (no re-render)
     const map = mapRef.current;
     if (!map) return;
 
     if (!dotLayerRef.current) {
       dotLayerRef.current = L.circleMarker([fix.lat, fix.lng], {
-        radius: 9, color: '#fff', weight: 3,
-        fillColor: '#2f8fe0', fillOpacity: 1,
-        className: 'gps-dot',
+        radius: 9, color: '#fff', weight: 3, fillColor: '#2f8fe0', fillOpacity: 1,
       }).addTo(map).bindPopup(`Position ±${Math.round(fix.accuracyMeters)} m`);
     } else {
       dotLayerRef.current.setLatLng([fix.lat, fix.lng]);
@@ -118,9 +96,7 @@ export default function App() {
 
     if (!ringLayerRef.current) {
       ringLayerRef.current = L.circle([fix.lat, fix.lng], {
-        radius: fix.accuracyMeters,
-        color: '#2f8fe0', weight: 1,
-        fillColor: '#2f8fe0', fillOpacity: 0.1,
+        radius: fix.accuracyMeters, color: '#2f8fe0', weight: 1, fillColor: '#2f8fe0', fillOpacity: 0.1,
       }).addTo(map);
     } else {
       ringLayerRef.current.setLatLng([fix.lat, fix.lng]);
@@ -130,110 +106,86 @@ export default function App() {
 
   const handleTrackPoint = useCallback((pt: TrackPoint) => {
     trackPtsRef.current.push(pt);
-    const count = trackPtsRef.current.length;
-    setTrackCount(count);
-
+    setTrackCount(trackPtsRef.current.length);
     const map = mapRef.current;
     if (!map) return;
 
-    // Create the polyline layer if it doesn't exist yet
     if (!trackLayerRef.current) {
       trackLayerRef.current = L.polyline([[pt.lat, pt.lng]], {
-        color: activeColorRef.current,
-        weight: 5, opacity: 0.95,
-        lineJoin: 'round', lineCap: 'round',
+        color: activeColorRef.current, weight: 5, opacity: 0.95, lineJoin: 'round', lineCap: 'round',
       }).addTo(map);
     } else {
-      // O(1) incremental extension — the key to smooth real-time tracking
       trackLayerRef.current.addLatLng([pt.lat, pt.lng]);
     }
 
-    // Change dot color to track color while recording
-    if (dotLayerRef.current) {
-      dotLayerRef.current.setStyle({ fillColor: activeColorRef.current });
-    }
-    if (ringLayerRef.current) {
-      ringLayerRef.current.setStyle({ color: activeColorRef.current, fillColor: activeColorRef.current });
-    }
+    if (dotLayerRef.current)  dotLayerRef.current.setStyle({ fillColor: activeColorRef.current });
+    if (ringLayerRef.current) ringLayerRef.current.setStyle({ color: activeColorRef.current, fillColor: activeColorRef.current });
 
-    // Auto-pan to keep position visible without jarring the user
     const mapBounds = map.getBounds().pad(-0.1);
     if (!mapBounds.contains([pt.lat, pt.lng])) {
       map.panTo([pt.lat, pt.lng], { animate: true, duration: 0.8 });
     }
   }, []);
 
-  const { error: gpsTrackError } = useGpsTrack({
-    onFix: handleFix,
-    onTrackPoint: handleTrackPoint,
-    isRecording,
-  });
+  const { error: gpsTrackError } = useGpsTrack({ onFix: handleFix, onTrackPoint: handleTrackPoint, isRecording });
 
-  // ── Track start/stop ─────────────────────────────────────────────────
+  // ── Track start/stop ──────────────────────────────────────────────────
   function destroyTrackLayer() {
     if (trackLayerRef.current) { trackLayerRef.current.remove(); trackLayerRef.current = null; }
-    // Restore dot to blue (not recording color)
-    if (dotLayerRef.current) dotLayerRef.current.setStyle({ fillColor: '#2f8fe0' });
-    if (ringLayerRef.current) ringLayerRef.current.setStyle({ color: '#2f8fe0', fillColor: '#2f8fe0' });
+    if (dotLayerRef.current)   dotLayerRef.current.setStyle({ fillColor: '#2f8fe0' });
+    if (ringLayerRef.current)  ringLayerRef.current.setStyle({ color: '#2f8fe0', fillColor: '#2f8fe0' });
   }
 
   async function toggleRecording() {
     if (isRecording) {
-      // ── STOP ──────────────────────────────────────────────────────────
       setIsRecording(false);
-
       const pts = trackPtsRef.current;
       if (pts.length > 1) {
         const result = measureLineDistance(pts);
         await db.tracks.add({
           name: 'Track ' + formatIctIso8601(),
-          points: pts.map((p) => ({
-            lat: p.lat, lng: p.lng,
-            elevationMeters: p.elevationMeters ?? null,
-            timestamp: p.timestamp,
-          })),
+          points: pts.map((p) => ({ lat: p.lat, lng: p.lng, elevationMeters: p.elevationMeters ?? null, timestamp: p.timestamp })),
           createdAtIct: formatIctIso8601(),
           distanceMeters: result.meters,
           color: activeColorRef.current,
         });
       }
-
-      destroyTrackLayer();
+      // NOTE: we do NOT destroyTrackLayer here any more.
+      // The live track layer is left on the map visually.
+      // When the storedTracks LiveQuery re-fires (Dexie will trigger it
+      // since we just did db.tracks.add), MapView will render the saved
+      // track as a permanent Polyline — at that point the two overlap
+      // visually (same color), then on next pan/zoom Leaflet will just
+      // show the MapView one. We destroy the imperative layer after a
+      // short delay so there's no visual flash.
+      setTimeout(() => {
+        destroyTrackLayer();
+      }, 500);
       trackPtsRef.current = [];
       setTrackCount(0);
-
     } else {
-      // ── START ─────────────────────────────────────────────────────────
       trackPtsRef.current = [];
       setTrackCount(0);
-      destroyTrackLayer(); // clean slate
-
-      // Pre-create the polyline if map is already ready
+      destroyTrackLayer();
       const map = mapRef.current;
       if (map) {
         trackLayerRef.current = L.polyline([], {
-          color: activeColorRef.current,
-          weight: 5, opacity: 0.95,
-          lineJoin: 'round', lineCap: 'round',
+          color: activeColorRef.current, weight: 5, opacity: 0.95, lineJoin: 'round', lineCap: 'round',
         }).addTo(map);
       }
-
       setIsRecording(true);
     }
   }
 
-  // Update track color live if user changes picker while recording
   useEffect(() => {
-    if (trackLayerRef.current)  trackLayerRef.current.setStyle({ color: activeColor });
+    if (trackLayerRef.current) trackLayerRef.current.setStyle({ color: activeColor });
   }, [activeColor]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => { destroyTrackLayer(); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Export ────────────────────────────────────────────────────────────
   function handleExportTrack(format: 'kml' | 'gpx') {
     const pts = trackPtsRef.current;
     if (pts.length === 0) return;
@@ -274,9 +226,6 @@ export default function App() {
 
   if (!config) return <BootSplash />;
 
-  // Compose GPS error for HUD from both sources
-  const combinedGpsError = gpsError ?? gpsTrackError ?? null;
-
   return (
     <div className="app-shell">
       <TopBar config={config} layerCount={storedLayers.length} isRecording={isRecording} onToggleMenu={() => setShowMenu((v) => !v)} />
@@ -286,10 +235,14 @@ export default function App() {
         storedLayers={storedLayers.map((l) => ({ id: l.id!, geojson: l.geojson, name: l.name }))}
         storedPoints={storedPoints}
         storedDrawings={storedDrawings}
+        storedTracks={storedTracks}
+        storedMeasurements={storedMeasurements}
         activeTool={activeTool}
         activeToolPoints={toolPoints}
         drawGeometryType={drawGeometryType}
         activeColor={activeColor}
+        activeBasemapId={activeBasemapId}
+        onBasemapChange={handleBasemapChange}
         onMapClick={handleMapClick}
         onMapReady={onMapReady}
       />
@@ -318,13 +271,12 @@ export default function App() {
         />
       )}
 
-      {showMarkPointXY  && <MarkPointXY liveGps={liveGps} onClose={() => setShowMarkPointXY(false)} />}
-      {showImport       && <ImportPanel onClose={() => setShowImport(false)} onLayerImported={() => {}} />}
-      {showData         && <DataPanel   onClose={() => setShowData(false)} />}
+      {showMarkPointXY && <MarkPointXY liveGps={liveGps} onClose={() => setShowMarkPointXY(false)} />}
+      {showImport      && <ImportPanel onClose={() => setShowImport(false)} onLayerImported={() => {}} />}
+      {showData        && <DataPanel   onClose={() => setShowData(false)} />}
 
       <GpsStatusBar fix={liveFix} isRecording={isRecording} trackCount={trackCount} onLocateMe={locateMe} />
-
-      <FieldHud liveGps={liveGps} gpsError={combinedGpsError} isIct={config.isIct} />
+      <FieldHud liveGps={liveGps} gpsError={gpsError ?? gpsTrackError ?? null} isIct={config.isIct} />
     </div>
   );
 }

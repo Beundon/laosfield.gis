@@ -14,3 +14,31 @@
 .leaflet-container {
   font-family: var(--font-ui);
 }
+
+/* Basemap toggle button — bottom-left above zoom controls */
+.basemap-btn {
+  position: fixed;
+  bottom: 160px;
+  left: 14px;
+  z-index: 1360;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--c-charcoal-900);
+  border: 1px solid var(--c-line-subtle);
+  border-radius: 22px;
+  color: var(--c-paper-100);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.basemap-btn:hover { border-color: rgba(232,163,61,0.45); }
+.basemap-btn__icon { font-size: 14px; flex-shrink: 0; }
+.basemap-btn__label { overflow: hidden; text-overflow: ellipsis; }
