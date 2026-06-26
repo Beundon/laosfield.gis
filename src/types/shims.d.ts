@@ -15,3 +15,9 @@ declare module 'virtual:pwa-register' {
   }
   export function registerSW(options?: RegisterSWOptions): (reloadPage?: boolean) => Promise<void>;
 }
+
+interface WakeLockSentinel extends EventTarget {
+  release(): Promise<void>;
+  readonly type: string;
+  readonly released: boolean;
+}
